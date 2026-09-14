@@ -22,6 +22,10 @@ func setupRoutes(router *gin.Engine, appServer *AppServer) {
 		api.GET("/login/status", appServer.apiCheckLoginStatus)
 		api.DELETE("/login/cookies", appServer.apiDeleteCookies)
 
+		// 账号身份（写操作 guard）
+		api.GET("/account/identity", appServer.apiGetAccountIdentity)
+		api.POST("/account/bind", appServer.apiBindAccountIdentity)
+
 		// 内容发布
 		api.POST("/publish/article", appServer.apiPublishArticle)
 		api.POST("/publish/micro", appServer.apiPublishMicroPost)

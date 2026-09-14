@@ -143,6 +143,9 @@ func (s *ToutiaoService) PublishMicroPost(ctx context.Context, content string, i
 	if err := toutiaohao.ValidateMicroPost(content, images, topic); err != nil {
 		return err
 	}
+	if _, err := s.guardWriteOperation(ctx, "publish_micro"); err != nil {
+		return err
+	}
 
 	b := browser.NewBrowser(false)
 	defer b.Close()
@@ -157,6 +160,9 @@ func (s *ToutiaoService) PublishMicroPost(ctx context.Context, content string, i
 // SaveMicroPostDraft 保存微头条草稿
 func (s *ToutiaoService) SaveMicroPostDraft(ctx context.Context, content string, images []string, topic string) error {
 	if err := toutiaohao.ValidateMicroPost(content, images, topic); err != nil {
+		return err
+	}
+	if _, err := s.guardWriteOperation(ctx, "save_micro_draft"); err != nil {
 		return err
 	}
 	fullContent := content
@@ -200,6 +206,14 @@ func (s *ToutiaoService) PublishArticle(ctx context.Context, title, content stri
 	log.Infof("[Step 1/7] 开始发布文章校验，标题: %s", title)
 	if err := toutiaohao.ValidateArticle(title, content, opts); err != nil {
 		log.Errorf("[Step 1/7] 参数校验失败: %v", err)
+		return nil, err
+	}
+	guardAction := "publish_article"
+	if opts != nil && opts.SaveAsDraft {
+		guardAction = "save_article_draft"
+	}
+	if _, err := s.guardWriteOperation(ctx, guardAction); err != nil {
+		log.Errorf("[Step 1/7] 账号身份校验失败: %v", err)
 		return nil, err
 	}
 	dedupeKey := articlePublishDedupeKey(title, content, opts)
@@ -334,6 +348,9 @@ func (s *ToutiaoService) GetArticleList(ctx context.Context, params *toutiaohao.
 
 // DeleteArticle 删除文章
 func (s *ToutiaoService) DeleteArticle(ctx context.Context, articleID string) error {
+	if _, err := s.guardWriteOperation(ctx, "delete_article"); err != nil {
+		return err
+	}
 	articleTitle := s.findArticleTitleForDelete(ctx, articleID)
 
 	// 先用 HTTP API 尝试删除（适用于已发布/审核中的文章），但必须复核，因为草稿删除可能返回成功却不生效。
@@ -503,6 +520,9 @@ func (s *ToutiaoService) ReplyComment(ctx context.Context, articleID, commentID,
 	if err := toutiaohao.ValidateReplyComment(articleID, commentID, commentText, replyContent); err != nil {
 		return nil, err
 	}
+	if _, err := s.guardWriteOperation(ctx, "reply_comment"); err != nil {
+		return nil, err
+	}
 	b := browser.NewBrowser(false)
 	defer b.Close()
 
@@ -553,6 +573,9 @@ func (s *ToutiaoService) GetAccountTrends(ctx context.Context, days int) (*touti
 // UpdateArticle 修改/更新文章
 func (s *ToutiaoService) UpdateArticle(ctx context.Context, articleID string, title, content string, opts *toutiaohao.ArticleOptions) (*toutiaohao.PublishResult, error) {
 	if err := toutiaohao.ValidateUpdateArticle(articleID, title, content, opts); err != nil {
+		return nil, err
+	}
+	if _, err := s.guardWriteOperation(ctx, "update_article"); err != nil {
 		return nil, err
 	}
 
