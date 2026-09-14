@@ -14,6 +14,7 @@ import (
 )
 
 func TestPublishArticleManual(t *testing.T) {
+	requireIntegrationGate(t)
 	// 动态创建测试插图目录与 dummy 临时图片文件
 	testdataDir := "./testdata"
 	testImagePath := filepath.Join(testdataDir, "test_cloud_computing.png")
@@ -221,6 +222,7 @@ func TestPublishArticleManual(t *testing.T) {
 }
 
 func TestPublishArticleBodyImageManual(t *testing.T) {
+	requireIntegrationGate(t)
 	testdataDir := "./testdata_body_image"
 	testImagePath := filepath.Join(testdataDir, "test_body_image.png")
 	if err := os.MkdirAll(testdataDir, 0755); err != nil {
@@ -314,6 +316,7 @@ func TestPublishArticleBodyImageManual(t *testing.T) {
 }
 
 func TestPublishMicroManual(t *testing.T) {
+	requireIntegrationGate(t)
 	// 动态创建测试插图目录与 dummy 临时图片文件
 	testdataDir := "./testdata_micro"
 	testImagePath := filepath.Join(testdataDir, "test_micro_image.png")
@@ -418,6 +421,7 @@ func TestPublishMicroManual(t *testing.T) {
 }
 
 func TestUpdateArticleManual(t *testing.T) {
+	requireIntegrationGate(t)
 	os.Setenv("TOUTIAOHAO_COOKIES_PATH", "../cookies.json")
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 	log.Info("开始修改/更新文章集成测试（新建临时文章 -> 修改 -> 清理）...")

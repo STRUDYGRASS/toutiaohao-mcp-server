@@ -9,6 +9,7 @@ import (
 
 // TestGetAccountTrendsManual 验证拉取近 N 天数据趋势的集成测试
 func TestGetAccountTrendsManual(t *testing.T) {
+	requireIntegrationGate(t)
 	cookieStore := cookies.NewFileCookieStore(cookies.GetDefaultCookiePath())
 	cookiesData, err := cookieStore.LoadCookies()
 	if err != nil || len(cookiesData) == 0 {
@@ -40,6 +41,7 @@ func TestGetAccountTrendsManual(t *testing.T) {
 
 // TestGetArticleDetailManual 验证拉取单篇文章详情的集成测试
 func TestGetArticleDetailManual(t *testing.T) {
+	requireIntegrationGate(t)
 	cookieStore := cookies.NewFileCookieStore(cookies.GetDefaultCookiePath())
 	cookiesData, err := cookieStore.LoadCookies()
 	if err != nil || len(cookiesData) == 0 {
@@ -92,6 +94,7 @@ func TestGetArticleDetailManual(t *testing.T) {
 
 // TestGetMicroPostsManual 验证拉取微头条列表的集成测试
 func TestGetMicroPostsManual(t *testing.T) {
+	requireIntegrationGate(t)
 	cookieStore := cookies.NewFileCookieStore(cookies.GetDefaultCookiePath())
 	cookiesData, err := cookieStore.LoadCookies()
 	if err != nil || len(cookiesData) == 0 {
