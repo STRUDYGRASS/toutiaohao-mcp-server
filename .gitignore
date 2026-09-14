@@ -37,3 +37,6 @@ Thumbs.db
 temp_uploads/
 tmp/
 .tmp/
+
+# account identity binding (per-machine account state, like cookies.json)
+identity_binding.json
