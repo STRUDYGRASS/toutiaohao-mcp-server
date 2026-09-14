@@ -274,10 +274,17 @@ func (s *ToutiaoService) PublishArticle(ctx context.Context, title, content stri
 	publishSubmitted = true
 
 	if opts != nil && opts.SaveAsDraft {
-		log.Info("[Step 6/7] 文章已按请求保存为草稿，跳过发布状态校验。")
+		log.Info("[Step 6/7] 草稿保存指令已提交，回读创作者草稿箱验证（不再信任 executor 自报）...")
+		draftID := s.waitForDraftByTitle(ctx, title, 4, 5*time.Second)
+		if draftID == "" {
+			return nil, fmt.Errorf(
+				"draft NOT verified: 草稿箱回读未找到标题 %q。已知平台行为（2026-09 实测）：编辑器自动保存 POST agw/article/publish 被平台拒绝（code 7050 保存失败，正文非空亦然），底部提示停留在“草稿保存中...”且平台不再重试，草稿从未真正创建。请按“未保存”处理，不要盲目重试；这是平台/账号限制，不是本地可修复的执行器缺陷",
+				title)
+		}
 		return &toutiaohao.PublishResult{
 			Success:        true,
-			Message:        "文章已保存为草稿",
+			Message:        "文章已保存为草稿，并已通过草稿箱回读验证",
+			ArticleID:      draftID,
 			CoverStatus:    "草稿未校验封面状态",
 			OriginalStatus: "草稿未校验原创状态",
 		}, nil

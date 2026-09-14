@@ -137,3 +137,23 @@ func isAccountMismatch(err error) bool {
 	var mm *AccountMismatchError
 	return errors.As(err, &mm)
 }
+
+// waitForDraftByTitle 轮询创作者草稿箱，按精确标题匹配返回草稿 article_id；
+// attempts 次后仍未出现则返回空串（调用方必须按“未保存”处理，不得重发）。
+func (s *ToutiaoService) waitForDraftByTitle(ctx context.Context, title string, attempts int, interval time.Duration) string {
+	for i := 0; i < attempts; i++ {
+		drafts, err := toutiaohao.ListCreatorDrafts(ctx, s.cookieStore)
+		if err != nil {
+			log.Warnf("草稿箱回读失败（attempt %d/%d）: %v", i+1, attempts, err)
+		} else {
+			for _, d := range drafts {
+				if strings.TrimSpace(d.Title) == strings.TrimSpace(title) && d.ArticleID != "" {
+					return d.ArticleID
+				}
+			}
+			log.Infof("草稿箱回读 attempt %d/%d：共 %d 条草稿，无标题匹配 %q", i+1, attempts, len(drafts), title)
+		}
+		time.Sleep(interval)
+	}
+	return ""
+}
