@@ -415,7 +415,15 @@ func (s *ToutiaoService) DeleteArticle(ctx context.Context, articleID string) er
 	time.Sleep(3 * time.Second)
 
 	if err := toutiaohao.DeleteDraftByBrowserOnPage(ctx, page, articleID, articleTitle); err != nil {
-		return err
+		// 草稿箱路径只对草稿有效；已发布内容走作品管理页"删除作品"路径（2026-09 本地实测新增）
+		log.Warnf("草稿箱路径删除未成功（%v），回退作品管理页: %s", err, articleID)
+		pubPage := rodBrowser.MustPage("https://mp.toutiao.com/profile_v4/graphic/articles")
+		defer pubPage.Close()
+		pubPage.Timeout(15 * time.Second).WaitLoad()
+		time.Sleep(3 * time.Second)
+		if errPub := toutiaohao.DeletePublishedByBrowserOnPage(ctx, pubPage, articleID, articleTitle); errPub != nil {
+			return errPub
+		}
 	}
 
 	time.Sleep(2 * time.Second)
