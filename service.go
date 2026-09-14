@@ -143,6 +143,9 @@ func (s *ToutiaoService) PublishMicroPost(ctx context.Context, content string, i
 	if err := toutiaohao.ValidateMicroPost(content, images, topic); err != nil {
 		return err
 	}
+	if _, err := s.guardWriteOperation(ctx, "publish_micro"); err != nil {
+		return err
+	}
 
 	b := browser.NewBrowser(false)
 	defer b.Close()
@@ -157,6 +160,9 @@ func (s *ToutiaoService) PublishMicroPost(ctx context.Context, content string, i
 // SaveMicroPostDraft 保存微头条草稿
 func (s *ToutiaoService) SaveMicroPostDraft(ctx context.Context, content string, images []string, topic string) error {
 	if err := toutiaohao.ValidateMicroPost(content, images, topic); err != nil {
+		return err
+	}
+	if _, err := s.guardWriteOperation(ctx, "save_micro_draft"); err != nil {
 		return err
 	}
 	fullContent := content
@@ -200,6 +206,14 @@ func (s *ToutiaoService) PublishArticle(ctx context.Context, title, content stri
 	log.Infof("[Step 1/7] 开始发布文章校验，标题: %s", title)
 	if err := toutiaohao.ValidateArticle(title, content, opts); err != nil {
 		log.Errorf("[Step 1/7] 参数校验失败: %v", err)
+		return nil, err
+	}
+	guardAction := "publish_article"
+	if opts != nil && opts.SaveAsDraft {
+		guardAction = "save_article_draft"
+	}
+	if _, err := s.guardWriteOperation(ctx, guardAction); err != nil {
+		log.Errorf("[Step 1/7] 账号身份校验失败: %v", err)
 		return nil, err
 	}
 	dedupeKey := articlePublishDedupeKey(title, content, opts)
@@ -260,10 +274,17 @@ func (s *ToutiaoService) PublishArticle(ctx context.Context, title, content stri
 	publishSubmitted = true
 
 	if opts != nil && opts.SaveAsDraft {
-		log.Info("[Step 6/7] 文章已按请求保存为草稿，跳过发布状态校验。")
+		log.Info("[Step 6/7] 草稿保存指令已提交，回读创作者草稿箱验证（不再信任 executor 自报）...")
+		draftID := s.waitForDraftByTitle(ctx, title, 4, 5*time.Second)
+		if draftID == "" {
+			return nil, fmt.Errorf(
+				"draft NOT verified: 草稿箱回读未找到标题 %q。已知平台行为（2026-09 实测）：编辑器自动保存 POST agw/article/publish 被平台拒绝（code 7050 保存失败，正文非空亦然），底部提示停留在“草稿保存中...”且平台不再重试，草稿从未真正创建。请按“未保存”处理，不要盲目重试；这是平台/账号限制，不是本地可修复的执行器缺陷",
+				title)
+		}
 		return &toutiaohao.PublishResult{
 			Success:        true,
-			Message:        "文章已保存为草稿",
+			Message:        "文章已保存为草稿，并已通过草稿箱回读验证",
+			ArticleID:      draftID,
 			CoverStatus:    "草稿未校验封面状态",
 			OriginalStatus: "草稿未校验原创状态",
 		}, nil
@@ -334,6 +355,9 @@ func (s *ToutiaoService) GetArticleList(ctx context.Context, params *toutiaohao.
 
 // DeleteArticle 删除文章
 func (s *ToutiaoService) DeleteArticle(ctx context.Context, articleID string) error {
+	if _, err := s.guardWriteOperation(ctx, "delete_article"); err != nil {
+		return err
+	}
 	articleTitle := s.findArticleTitleForDelete(ctx, articleID)
 
 	// 先用 HTTP API 尝试删除（适用于已发布/审核中的文章），但必须复核，因为草稿删除可能返回成功却不生效。
@@ -415,7 +439,15 @@ func (s *ToutiaoService) DeleteArticle(ctx context.Context, articleID string) er
 	time.Sleep(3 * time.Second)
 
 	if err := toutiaohao.DeleteDraftByBrowserOnPage(ctx, page, articleID, articleTitle); err != nil {
-		return err
+		// 草稿箱路径只对草稿有效；已发布内容走作品管理页"删除作品"路径（2026-09 本地实测新增）
+		log.Warnf("草稿箱路径删除未成功（%v），回退作品管理页: %s", err, articleID)
+		pubPage := rodBrowser.MustPage("https://mp.toutiao.com/profile_v4/graphic/articles")
+		defer pubPage.Close()
+		pubPage.Timeout(15 * time.Second).WaitLoad()
+		time.Sleep(3 * time.Second)
+		if errPub := toutiaohao.DeletePublishedByBrowserOnPage(ctx, pubPage, articleID, articleTitle); errPub != nil {
+			return errPub
+		}
 	}
 
 	time.Sleep(2 * time.Second)
@@ -495,6 +527,9 @@ func (s *ToutiaoService) ReplyComment(ctx context.Context, articleID, commentID,
 	if err := toutiaohao.ValidateReplyComment(articleID, commentID, commentText, replyContent); err != nil {
 		return nil, err
 	}
+	if _, err := s.guardWriteOperation(ctx, "reply_comment"); err != nil {
+		return nil, err
+	}
 	b := browser.NewBrowser(false)
 	defer b.Close()
 
@@ -545,6 +580,9 @@ func (s *ToutiaoService) GetAccountTrends(ctx context.Context, days int) (*touti
 // UpdateArticle 修改/更新文章
 func (s *ToutiaoService) UpdateArticle(ctx context.Context, articleID string, title, content string, opts *toutiaohao.ArticleOptions) (*toutiaohao.PublishResult, error) {
 	if err := toutiaohao.ValidateUpdateArticle(articleID, title, content, opts); err != nil {
+		return nil, err
+	}
+	if _, err := s.guardWriteOperation(ctx, "update_article"); err != nil {
 		return nil, err
 	}
 

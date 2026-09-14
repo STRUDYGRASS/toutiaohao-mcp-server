@@ -368,3 +368,23 @@ func (s *AppServer) handleGetAccountTrends(ctx context.Context, args map[string]
 	data, _ := json.Marshal(result)
 	return NewTextResult(string(data))
 }
+
+// handleGetAccountIdentity 处理读取当前登录创作者身份
+func (s *AppServer) handleGetAccountIdentity(ctx context.Context, args map[string]interface{}) *MCPToolResult {
+	idn, err := s.toutiaoService.GetAccountIdentity(ctx)
+	if err != nil {
+		return NewErrorResult(err.Error())
+	}
+	data, _ := json.Marshal(idn)
+	return NewTextResult(string(data))
+}
+
+// handleBindAccountIdentity 处理显式绑定当前账号为期望写操作对象
+func (s *AppServer) handleBindAccountIdentity(ctx context.Context, args map[string]interface{}) *MCPToolResult {
+	idn, err := s.toutiaoService.BindAccountIdentity(ctx)
+	if err != nil {
+		return NewErrorResult(err.Error())
+	}
+	data, _ := json.Marshal(idn)
+	return NewTextResult(string(data))
+}

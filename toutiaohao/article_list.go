@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"net/url"
 	"strings"
 	"time"
@@ -1157,6 +1158,89 @@ func DeleteDraftByBrowserOnPage(ctx context.Context, page *rod.Page, articleID s
 
 	_, err := deleteDraftFromCurrentPage(page, articleID, articleTitle)
 	return err
+}
+
+// DeletePublishedByBrowserOnPage 通过作品管理页删除"已发布"内容（2026-09 本地实测新增）。
+// 当前头条后台的已发布卡片不提供独立删除按钮，需 hover 卡片"更多"后点击"删除作品"，
+// 再在确认弹窗中确认。草稿箱路径（DeleteDraftByBrowserOnPage）对已发布内容无效。
+func DeletePublishedByBrowserOnPage(ctx context.Context, page *rod.Page, articleID string, articleTitle string) error {
+	log.Infof("正在作品管理页删除已发布内容: id=%s 标题=%s", articleID, articleTitle)
+
+	// 关闭新手引导/合集推广弹窗，避免遮挡点击
+	_, _ = page.Eval(`() => {
+		document.querySelectorAll('button, [class*="btn"], a, span, div').forEach(el => {
+			if (el.offsetWidth > 0 && (el.innerText||'').trim() === '我知道了') el.click();
+		});
+	}`)
+	time.Sleep(1 * time.Second)
+
+	locate := articleTitle
+	if strings.TrimSpace(locate) == "" {
+		locate = articleID
+	}
+	p := page.Timeout(10 * time.Second)
+	card, err := p.ElementR(".article-card", regexp.QuoteMeta(locate))
+	if err != nil || card == nil {
+		// 标题匹配失败时退化为链接 href 含文章 ID 的卡片
+		card, err = page.ElementR(".article-card", articleID)
+		if err != nil || card == nil {
+			return fmt.Errorf("未在作品管理页找到待删除内容卡片: id=%s title=%s", articleID, articleTitle)
+		}
+	}
+	_, _ = card.Eval(`() => { this.scrollIntoView({block: 'center'}); }`)
+	time.Sleep(800 * time.Millisecond)
+
+	// 工具条（含"删除作品"）在卡片 hover 时渲染；先 hover 卡片，再 hover "更多"，多轮重试
+	var delBtn *rod.Element
+	for attempt := 0; attempt < 3 && delBtn == nil; attempt++ {
+		_ = card.Hover()
+		time.Sleep(800 * time.Millisecond)
+		if more, errMore := card.ElementR("span", "^更多$"); errMore == nil && more != nil {
+			_ = more.Hover()
+		}
+		time.Sleep(1200 * time.Millisecond)
+		delBtn, _ = page.Timeout(4 * time.Second).ElementR("span", "^删除作品$")
+		if delBtn == nil {
+			delBtn, _ = page.Timeout(2 * time.Second).ElementR("li", "^删除作品$")
+		}
+		if delBtn == nil {
+			delBtn, _ = page.Timeout(2 * time.Second).ElementR("a", "^删除作品$")
+		}
+		log.Infof("删除作品入口查找 attempt=%d found=%v", attempt+1, delBtn != nil)
+	}
+	if delBtn == nil {
+		return fmt.Errorf("hover 后未找到'删除作品'入口: id=%s", articleID)
+	}
+	if pt, ptErr := delBtn.Interactable(); ptErr == nil {
+		page.Mouse.MustMoveTo(pt.X, pt.Y)
+		page.Mouse.MustClick(proto.InputMouseButtonLeft)
+	} else {
+		_ = delBtn.Click(proto.InputMouseButtonLeft, 1)
+	}
+	log.Infof("已点击'删除作品'，等待确认弹窗: %s", articleID)
+	time.Sleep(2 * time.Second)
+
+	// 确认弹窗：优先"确认"，兼容"确定/删除"
+	confirmed := false
+	for _, pattern := range []string{"^确认$", "^确定$", "^删除$"} {
+		btn, errBtn := page.Timeout(3 * time.Second).ElementR("button", pattern)
+		if errBtn == nil && btn != nil {
+			if pt, ptErr := btn.Interactable(); ptErr == nil {
+				page.Mouse.MustMoveTo(pt.X, pt.Y)
+				page.Mouse.MustClick(proto.InputMouseButtonLeft)
+			} else {
+				_ = btn.Click(proto.InputMouseButtonLeft, 1)
+			}
+			confirmed = true
+			log.Infof("确认弹窗已点击: pattern=%s", pattern)
+			break
+		}
+	}
+	if !confirmed {
+		return fmt.Errorf("点击删除后未出现可确认的弹窗按钮: id=%s", articleID)
+	}
+	time.Sleep(2 * time.Second)
+	return nil
 }
 
 // DeleteDraftByBrowserWithTitle 用浏览器删除草稿，支持通过文章标题定位列表卡片。

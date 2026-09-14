@@ -374,3 +374,24 @@ func (s *AppServer) apiGetAccountTrends(c *gin.Context) {
 	}
 	respondSuccess(c, result)
 }
+
+// apiGetAccountIdentity 读取当前登录创作者身份 API（uid 稳定主键，只读）
+func (s *AppServer) apiGetAccountIdentity(c *gin.Context) {
+	idn, err := s.toutiaoService.GetAccountIdentity(c.Request.Context())
+	if err != nil {
+		respondError(c, mapErrorToStatusCode(err), err.Error())
+		return
+	}
+	respondSuccess(c, idn)
+}
+
+// apiBindAccountIdentity 显式绑定当前登录账号为期望写操作对象 API。
+// 绑定后所有写操作要求实际登录账号 uid 与绑定一致，不一致返回 ACCOUNT_MISMATCH。
+func (s *AppServer) apiBindAccountIdentity(c *gin.Context) {
+	idn, err := s.toutiaoService.BindAccountIdentity(c.Request.Context())
+	if err != nil {
+		respondError(c, mapErrorToStatusCode(err), err.Error())
+		return
+	}
+	respondSuccess(c, idn)
+}

@@ -187,6 +187,32 @@ func registerAuthTools(server *mcp.Server, appServer *AppServer) {
 			return convertToMCPResult(result), nil, nil
 		}))
 
+	// get_account_identity
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_account_identity",
+		Description: "读取当前登录创作者身份（creator_uid 为稳定主键，creator_name 仅辅助核对）",
+		Annotations: &mcp.ToolAnnotations{
+			ReadOnlyHint: true,
+		},
+	}, withPanicRecovery("get_account_identity",
+		func(ctx context.Context, req *mcp.CallToolRequest, args CheckLoginStatusArgs) (*mcp.CallToolResult, any, error) {
+			result := appServer.handleGetAccountIdentity(ctx, nil)
+			return convertToMCPResult(result), nil, nil
+		}))
+
+	// bind_account_identity
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "bind_account_identity",
+		Description: "显式绑定当前登录账号为期望写操作对象；绑定后所有写操作要求实际登录账号 uid 与绑定一致，不一致拒绝（ACCOUNT_MISMATCH）",
+		Annotations: &mcp.ToolAnnotations{
+			DestructiveHint: boolPtr(true),
+		},
+	}, withPanicRecovery("bind_account_identity",
+		func(ctx context.Context, req *mcp.CallToolRequest, args CheckLoginStatusArgs) (*mcp.CallToolResult, any, error) {
+			result := appServer.handleBindAccountIdentity(ctx, nil)
+			return convertToMCPResult(result), nil, nil
+		}))
+
 	// delete_cookies
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "delete_cookies",
